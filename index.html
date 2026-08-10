@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清廉手册 - 场景化精细检索工具</title>
+    <!-- 引入轻量级模糊搜索库 Fuse.js -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
+    <style>
+        :root {
+            --primary-color: #003a8c;
+            --accent-color: #1890ff;
+            --danger-color: #cf1322;
+            --danger-bg: #fff1f0;
+            --danger-border: #ffa39e;
+            --success-color: #389e0d;
+            --success-bg: #f6ffed;
+            --success-border: #b7eb8f;
+            --bg-color: #f0f2f5;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #1f1f1f;
+        }
+
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        .header-title {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+        }
+
+        .header-title h1 {
+            margin: 0;
+            font-size: 26px;
+        }
+
+        .header-title p {
+            margin-top: 6px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 控制台面板：含搜索框与精细检索配置 */
+        .control-panel {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 2px solid #d9d9d9;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        /* 精细过滤配置区 */
+        .filter-config {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            background: #fafafa;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #f0f0f0;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #595959;
+        }
+
+        .filter-select {
+            padding: 6px 10px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            outline: none;
+            font-size: 13px;
+            background: #fff;
+        }
+
+        .checkbox-label {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--danger-color);
+            font-weight: 500;
+        }
+
+        .quick-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .quick-tag-label {
+            font-size: 13px;
+            color: #8c8c8c;
+            font-weight: bold;
+        }
+
+        .tag-btn {
+            background: #e6f7ff;
+            color: var(--accent-color);
+            border: 1px solid #91d5ff;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tag-btn:hover {
+            background: #bae7ff;
+            border-color: var(--accent-color);
+        }
+
+        .result-count {
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #8c8c8c;
+        }
+
+        /* 知识卡片流 */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border-top: 4px solid var(--primary-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 8px;
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 0;
+            color: #000;
+        }
+
+        .card-category {
+            background: #f5f5f5;
+            border: 1px solid #d9d9d9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #595959;
+        }
+
+        .checklist-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        @media (max-width: 680px) {
+            .checklist-group { grid-template-columns: 1fr; }
+        }
+
+        .do-box {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .dont-box {
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .box-title {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .do-box .box-title { color: var(--success-color); }
+        .dont-box .box-title { color: var(--danger-color); }
+
+        ul {
+            margin: 0;
+            padding-left: 18px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        li {
+            margin-bottom: 4px;
+        }
+
+        .faq-box {
+            background: #fafafa;
+            border: 1px dashed #d9d9d9;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .faq-q {
+            font-weight: bold;
+            color: #262626;
+            margin-bottom: 4px;
+        }
+
+        .faq-a {
+            color: #595959;
+        }
+
+        .card-footer {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #bfbfbf;
+            text-align: right;
+        }
+
+        .no-result {
+            text-align: center;
+            padding: 40px;
+            color: #8c8c8c;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        /* 关键词高亮 */
+        mark {
+            background-color: #fffb8f;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-title">
+        <h1>清廉手册精细检索工具</h1>
+        <p>全量拆解15个模块条款，支持全文模糊检索、业务模块筛选与合规红线过滤</p>
+    </div>
+
+    <!-- 控制台：搜索框 + 检索配置项 + 场景快捷标签 -->
+    <div class="control-panel">
+        <div class="search-row">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜索口语词或条款细则（如：茅台、加油卡、五星级、租房补贴、私车公养...）" autofocus>
+        </div>
+
+        <!-- 检索配置工具栏 -->
+        <div class="filter-config">
+            <div class="filter-group">
+                <label for="categorySelect">业务分类：</label>
+                <select id="categorySelect" class="filter-select">
+                    <option value="">全部分类 (15大类)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="redlineOnly"> 🚫 只看违规禁令（负面清单）
+                </label>
+            </div>
+        </div>
+        
+        <!-- 高频场景快捷标签 -->
+        <div class="quick-tags">
+            <span class="quick-tag-label">高频场景：</span>
+            <button class="tag-btn" onclick="quickSearch('买酒')">招待买酒</button>
+            <button class="tag-btn" onclick="quickSearch('加油卡')">公车/加油卡</button>
+            <button class="tag-btn" onclick="quickSearch('坐高铁')">差旅交通</button>
+            <button class="tag-btn" onclick="quickSearch('购物卡')">礼品/卡券</button>
+            <button class="tag-btn" onclick="quickSearch('周转房')">异地租房</button>
+            <button class="tag-btn" onclick="quickSearch('五星级')">开会/五星级</button>
+            <button class="tag-btn" onclick="resetFilters()">重置所有条件</button>
+        </div>
+    </div>
+
+    <div id="resultCount" class="result-count"></div>
+
+    <!-- 卡片流展示区 -->
+    <div id="cardGrid" class="card-grid"></div>
+</div>
+
+<!-- 导入卡片数据源 -->
+<script src="data.js"></script>
+
+<script>
+    // 1. 精细调优 Fuse.js 全文模糊检索配置
+    const fuseOptions = {
+        includeScore: true,
+        threshold: 0.3,            // 灵敏度调优（0.3保证容错的同时避免不相关匹配）
+        ignoreLocation: true,       // 全局搜索，忽略关键词在文本中的出现位置
+        useExtendedSearch: true,    // 支持逻辑运算与词组搜索
+        keys: [
+            { name: 'synonyms', weight: 0.45 },     // 同义词权重最高
+            { name: 'title', weight: 0.25 },        // 卡片标题
+            { name: 'dontList', weight: 0.15 },     // 负面清单细节
+            { name: 'doList', weight: 0.10 },       // 正确做法细节
+            { name: 'faq.question', weight: 0.05 }   // 疑问解答
+        ]
+    };
+
+    const fuse = new Fuse(integrityCards, fuseOptions);
+
+    // DOM 节点
+    const searchInput = document.getElementById('searchInput');
+    const categorySelect = document.getElementById('categorySelect');
+    const redlineOnly = document.getElementById('redlineOnly');
+    const cardGrid = document.getElementById('cardGrid');
+    const resultCount = document.getElementById('resultCount');
+
+    // 2. 动态初始化分类下拉菜单
+    function initCategorySelect() {
+        const categories = [...new Set(integrityCards.map(c => c.category))];
+        categories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            categorySelect.appendChild(option);
+        });
+    }
+
+    // 3. 多维度复合检索逻辑
+    function handleSearch() {
+        const query = searchInput.value.trim();
+        const selectedCategory = categorySelect.value;
+        const isRedlineOnly = redlineOnly.checked;
+
+        let results = integrityCards;
+
+        // A. 全文/口语化模糊搜索
+        if (query) {
+            const fuseResults = fuse.search(query);
+            results = fuseResults.map(r => r.item);
+        }
+
+        // B. 业务模块分类筛选
+        if (selectedCategory) {
+            results = results.filter(card => card.category === selectedCategory);
+        }
+
+        // C. 渲染卡片
+        renderCards(results, isRedlineOnly);
+    }
+
+    // 4. 动态卡片渲染函数
+    function renderCards(cards, showRedlineOnly = false) {
+        resultCount.textContent = `共为您匹配到 ${cards.length} 张清廉准则微卡`;
+
+        if (cards.length === 0) {
+            cardGrid.innerHTML = `
+                <div class="no-result">
+                    <p>未找到符合条件的条款卡片。</p>
+                    <p style="font-size: 12px; color: #999;">建议减少过滤条件或换用更通俗的口语词重新搜索</p>
+                </div>`;
+            return;
+        }
+
+        cardGrid.innerHTML = cards.map(card => `
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">${card.title}</h3>
+                    <span class="card-category">${card.category}</span>
+                </div>
+                
+                <div class="checklist-group">
+                    ${!showRedlineOnly ? `
+                    <div class="do-box">
+                        <div class="box-title">✔ 合规要求与标准（正确做法）</div>
+                        <ul>
+                            ${card.doList.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+                    <div class="dont-box" style="${showRedlineOnly ? 'grid-column: span 2;' : ''}">
+                        <div class="box-title">✖ 负面清单与红线（严禁行为）</div>
+                        <ul>
+                            ${card.dontList.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+
+                ${card.faq ? `
+                <div class="faq-box">
+                    <div class="faq-q">❓ 常见疑问：${card.faq.question}</div>
+                    <div class="faq-a">💡 明确解答：${card.faq.answer}</div>
+                </div>
+                ` : ''}
+
+                <div class="card-footer">出处：${card.reference}</div>
+            </div>
+        `).join('');
+    }
+
+    // 5. 快捷标签与重置
+    function quickSearch(keyword) {
+        searchInput.value = keyword;
+        handleSearch();
+    }
+
+    function resetFilters() {
+        searchInput.value = '';
+        categorySelect.value = '';
+        redlineOnly.checked = false;
+        handleSearch();
+    }
+
+    // 事件绑定
+    searchInput.addEventListener('input', handleSearch);
+    categorySelect.addEventListener('change', handleSearch);
+    redlineOnly.addEventListener('change', handleSearch);
+
+    // 初始化页面
+    initCategorySelect();
+    handleSearch();
+</script>
+
+</body>
+</html>
