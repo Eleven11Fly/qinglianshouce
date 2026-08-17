@@ -335,33 +335,118 @@
 <!-- 导入卡片数据源 -->
 <script src="data.js"></script>
 
+<!-- 1. 先加载数据文件 -->
+<script src="data.js"></script>
+
+<!-- 2. 再加载防护优化后的主逻辑 -->
 <script>
-    // 1. 精细调优 Fuse.js 全文模糊检索配置
+(function() {
+    // 1. 安全转义工具
+    function escapeHTML(str) {
+        if (str == null) return '';
+        return String(str).replace(/[&<>":'`=\/]/g, function (s) {
+            return ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+                '`': '&#96;',
+                '=': '&#61;',
+                '/': '&#x2F;'
+            })[s];
+        });
+    }
+
+    // 2. 检索配置与主逻辑
+    const fuseOptions = {};
+    
+    // ...其余逻辑...
+
+    // 3. 将快捷按钮调用的函数绑定到 window
+    window.quickSearch = function(keyword) {
+        searchInput.value = keyword;
+        handleSearch();
+    };
+
+    window.resetFilters = function() {
+        searchInput.value = '';
+        categorySelect.value = '';
+        redlineOnly.checked = false;
+        handleSearch();
+    };
+
+    // 4. 初始化
+    initCategorySelect();
+    handleSearch();
+})();
+</script>
+
+<script>
+(function() {
+    // ==========================================
+    // 1. 安全转义工具（防范 XSS 注入）
+    // ==========================================
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ==========================================
+    // 2. 关键词高亮渲染核心函数（先转义，后高亮）
+    // ==========================================
+    function highlightText(text, query) {
+        const safeText = escapeHTML(text);
+        if (!query) return safeText;
+
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) return safeText;
+
+        const escapedQuery = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedQuery})`, 'gi');
+        
+        return safeText.replace(regex, '<mark>$1</mark>');
+    }
+
+    // ==========================================
+    // 3. Fuse.js 模糊检索配置
+    // ==========================================
     const fuseOptions = {
         includeScore: true,
-        threshold: 0.3,            // 灵敏度调优（0.3保证容错的同时避免不相关匹配）
-        ignoreLocation: true,       // 全局搜索，忽略关键词在文本中的出现位置
-        useExtendedSearch: true,    // 支持逻辑运算与词组搜索
+        threshold: 0.3,
+        ignoreLocation: true,
+        useExtendedSearch: true,
         keys: [
-            { name: 'synonyms', weight: 0.45 },     // 同义词权重最高
-            { name: 'title', weight: 0.25 },        // 卡片标题
-            { name: 'dontList', weight: 0.15 },     // 负面清单细节
-            { name: 'doList', weight: 0.10 },       // 正确做法细节
-            { name: 'faq.question', weight: 0.05 }   // 疑问解答
+            { name: 'synonyms', weight: 0.45 },
+            { name: 'title', weight: 0.25 },
+            { name: 'dontList', weight: 0.15 },
+            { name: 'doList', weight: 0.10 },
+            { name: 'faq.question', weight: 0.05 }
         ]
     };
 
-    const fuse = new Fuse(integrityCards, fuseOptions);
+    let fuse = null;
+    if (typeof integrityCards !== 'undefined' && typeof Fuse !== 'undefined') {
+        fuse = new Fuse(integrityCards, fuseOptions);
+    }
 
-    // DOM 节点
+    // DOM 节点绑定
     const searchInput = document.getElementById('searchInput');
     const categorySelect = document.getElementById('categorySelect');
     const redlineOnly = document.getElementById('redlineOnly');
     const cardGrid = document.getElementById('cardGrid');
     const resultCount = document.getElementById('resultCount');
 
-    // 2. 动态初始化分类下拉菜单
+    // ==========================================
+    // 4. 动态初始化分类下拉菜单
+    // ==========================================
     function initCategorySelect() {
+        if (typeof integrityCards === 'undefined') return;
         const categories = [...new Set(integrityCards.map(c => c.category))];
         categories.forEach(cat => {
             const option = document.createElement('option');
@@ -371,31 +456,34 @@
         });
     }
 
-    // 3. 多维度复合检索逻辑
+    // ==========================================
+    // 5. 复合检索逻辑
+    // ==========================================
     function handleSearch() {
+        if (typeof integrityCards === 'undefined') return;
+
         const query = searchInput.value.trim();
         const selectedCategory = categorySelect.value;
         const isRedlineOnly = redlineOnly.checked;
 
         let results = integrityCards;
 
-        // A. 全文/口语化模糊搜索
-        if (query) {
+        if (query && fuse) {
             const fuseResults = fuse.search(query);
             results = fuseResults.map(r => r.item);
         }
 
-        // B. 业务模块分类筛选
         if (selectedCategory) {
             results = results.filter(card => card.category === selectedCategory);
         }
 
-        // C. 渲染卡片
-        renderCards(results, isRedlineOnly);
+        renderCards(results, isRedlineOnly, query);
     }
 
-    // 4. 动态卡片渲染函数
-    function renderCards(cards, showRedlineOnly = false) {
+    // ==========================================
+    // 6. 安全卡片渲染（含关键词高亮）
+    // ==========================================
+    function renderCards(cards, showRedlineOnly = false, query = '') {
         resultCount.textContent = `共为您匹配到 ${cards.length} 张清廉准则微卡`;
 
         if (cards.length === 0) {
@@ -410,8 +498,8 @@
         cardGrid.innerHTML = cards.map(card => `
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">${card.title}</h3>
-                    <span class="card-category">${card.category}</span>
+                    <h3 class="card-title">${highlightText(card.title, query)}</h3>
+                    <span class="card-category">${escapeHTML(card.category)}</span>
                 </div>
                 
                 <div class="checklist-group">
@@ -419,51 +507,54 @@
                     <div class="do-box">
                         <div class="box-title">✔ 合规要求与标准（正确做法）</div>
                         <ul>
-                            ${card.doList.map(item => `<li>${item}</li>`).join('')}
+                            ${card.doList.map(item => `<li>${highlightText(item, query)}</li>`).join('')}
                         </ul>
                     </div>
                     ` : ''}
                     <div class="dont-box" style="${showRedlineOnly ? 'grid-column: span 2;' : ''}">
                         <div class="box-title">✖ 负面清单与红线（严禁行为）</div>
                         <ul>
-                            ${card.dontList.map(item => `<li>${item}</li>`).join('')}
+                            ${card.dontList.map(item => `<li>${highlightText(item, query)}</li>`).join('')}
                         </ul>
                     </div>
                 </div>
 
                 ${card.faq ? `
                 <div class="faq-box">
-                    <div class="faq-q">❓ 常见疑问：${card.faq.question}</div>
-                    <div class="faq-a">💡 明确解答：${card.faq.answer}</div>
+                    <div class="faq-q">❓ 常见疑问：${highlightText(card.faq.question, query)}</div>
+                    <div class="faq-a">💡 明确解答：${highlightText(card.faq.answer, query)}</div>
                 </div>
                 ` : ''}
 
-                <div class="card-footer">出处：${card.reference}</div>
+                <div class="card-footer">出处：${escapeHTML(card.reference)}</div>
             </div>
         `).join('');
     }
 
-    // 5. 快捷标签与重置
-    function quickSearch(keyword) {
+    // ==========================================
+    // 7. 全局挂载函数
+    // ==========================================
+    window.quickSearch = function(keyword) {
         searchInput.value = keyword;
         handleSearch();
-    }
+    };
 
-    function resetFilters() {
+    window.resetFilters = function() {
         searchInput.value = '';
         categorySelect.value = '';
         redlineOnly.checked = false;
         handleSearch();
-    }
+    };
 
     // 事件绑定
     searchInput.addEventListener('input', handleSearch);
     categorySelect.addEventListener('change', handleSearch);
     redlineOnly.addEventListener('change', handleSearch);
 
-    // 初始化页面
+    // 页面初始化
     initCategorySelect();
     handleSearch();
+})();
 </script>
 
 </body>
