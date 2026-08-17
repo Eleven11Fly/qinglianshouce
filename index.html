@@ -332,19 +332,18 @@
     <div id="cardGrid" class="card-grid"></div>
 </div>
 
-<!-- 导入卡片数据源 -->
+<!-- 1. 加载外部数据源与检索库 -->
 <script src="data.js"></script>
 
-<!-- 1. 先加载数据文件 -->
-<script src="data.js"></script>
-
-<!-- 2. 再加载防护优化后的主逻辑 -->
+<!-- 2. 防护优化后的主逻辑 -->
 <script>
 (function() {
-    // 1. 安全转义工具
+    // ==========================================
+    // 1. 安全转义工具（防范 XSS 注入）
+    // ==========================================
     function escapeHTML(str) {
         if (str == null) return '';
-        return String(str).replace(/[&<>":'`=\/]/g, function (s) {
+        return String(str).replace(/[&<>"':`=\/]/g, function (s) {
             return ({
                 '&': '&amp;',
                 '<': '&lt;',
@@ -358,47 +357,8 @@
         });
     }
 
-    // 2. 检索配置与主逻辑
-    const fuseOptions = {};
-    
-    // ...其余逻辑...
-
-    // 3. 将快捷按钮调用的函数绑定到 window
-    window.quickSearch = function(keyword) {
-        searchInput.value = keyword;
-        handleSearch();
-    };
-
-    window.resetFilters = function() {
-        searchInput.value = '';
-        categorySelect.value = '';
-        redlineOnly.checked = false;
-        handleSearch();
-    };
-
-    // 4. 初始化
-    initCategorySelect();
-    handleSearch();
-})();
-</script>
-
-<script>
-(function() {
     // ==========================================
-    // 1. 安全转义工具（防范 XSS 注入）
-    // ==========================================
-    function escapeHTML(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    // ==========================================
-    // 2. 关键词高亮渲染核心函数（先转义，后高亮）
+    // 2. 关键词高亮渲染（先转义，后高亮）
     // ==========================================
     function highlightText(text, query) {
         const safeText = escapeHTML(text);
@@ -414,7 +374,7 @@
     }
 
     // ==========================================
-    // 3. Fuse.js 模糊检索配置
+    // 3. Fuse.js 模糊检索配置与初始化
     // ==========================================
     const fuseOptions = {
         includeScore: true,
@@ -532,7 +492,7 @@
     }
 
     // ==========================================
-    // 7. 全局挂载函数
+    // 7. 全局事件绑定与快捷响应函数
     // ==========================================
     window.quickSearch = function(keyword) {
         searchInput.value = keyword;
@@ -546,16 +506,13 @@
         handleSearch();
     };
 
-    // 事件绑定
+    // 事件驱动绑定
     searchInput.addEventListener('input', handleSearch);
     categorySelect.addEventListener('change', handleSearch);
     redlineOnly.addEventListener('change', handleSearch);
 
-    // 页面初始化
+    // 初始化执行
     initCategorySelect();
     handleSearch();
 })();
 </script>
-
-</body>
-</html>
